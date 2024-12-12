@@ -2,8 +2,6 @@ package internal
 
 import (
 	"time"
-
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type RouteCreatedEvent struct {
@@ -55,7 +53,7 @@ type DriverMovedEvent struct {
 	Lng       float64 `json:"lng"`
 }
 
-func NewDriverMovedEvent(routeID string, lat float64, lng float64) *DriverMovedEvent {
+func NewDriverMovedEvent(routeID string, lat, lng float64) *DriverMovedEvent {
 	return &DriverMovedEvent{
 		EventName: "DriverMoved",
 		RouteID:   routeID,
@@ -64,7 +62,7 @@ func NewDriverMovedEvent(routeID string, lat float64, lng float64) *DriverMovedE
 	}
 }
 
-func RouteCreatedHandler(event *RouteCreatedEvent, routeService *RouteService, mongoClient *mongo.Client) (*FreightCalculatedEvent, error) {
+func RouteCreatedHandler(event *RouteCreatedEvent, routeService *RouteService) (*FreightCalculatedEvent, error) {
 	route := NewRoute(event.RouteID, event.Distance, event.Directions)
 	routeCreated, err := routeService.CreateRoute(route)
 	if err != nil {
@@ -74,7 +72,7 @@ func RouteCreatedHandler(event *RouteCreatedEvent, routeService *RouteService, m
 	return freightCalculatedEvent, nil
 }
 
-func DeliveryStartedHandler(event *DeliveryStartedEvent, routeService *RouteService, mongoClient *mongo.Client, ch chan *DriverMovedEvent) error {
+func DeliveryStartedHandler(event *DeliveryStartedEvent, routeService *RouteService, ch chan *DriverMovedEvent) error {
 	route, err := routeService.GetRoute(event.RouteID)
 	if err != nil {
 		return err
@@ -85,43 +83,8 @@ func DeliveryStartedHandler(event *DeliveryStartedEvent, routeService *RouteServ
 		driverMovedEvent.RouteID = route.ID
 		driverMovedEvent.Lat = direction.Lat
 		driverMovedEvent.Lng = direction.Lng
+		time.Sleep(time.Second)
 		ch <- driverMovedEvent
-		time.Sleep(1 * time.Second)
-	}
-	return nil
-}
-
-// event hub to handle events
-type EventHub struct {
-	routeService        *RouteService
-	mongoClient         *mongo.Client
-	chDriverMoved       chan *DriverMovedEvent
-	chFrieghtCalculated chan *FreightCalculatedEvent
-}
-
-func NewEventHub(routeService *RouteService, mongoClient *mongo.Client, chDriverMoved chan *DriverMovedEvent, chFreightCalculated chan *FreightCalculatedEvent) *EventHub {
-	return &EventHub{
-		routeService:        routeService,
-		mongoClient:         mongoClient,
-		chDriverMoved:       chDriverMoved,
-		chFrieghtCalculated: chFreightCalculated,
-	}
-}
-
-func (eh *EventHub) HandleEvent(event interface{}) error {
-	switch e := event.(type) {
-	case RouteCreatedEvent:
-		freightCalculatedEvent, err := RouteCreatedHandler(&e, eh.routeService, eh.mongoClient)
-		if err != nil {
-			return err
-		}
-		// send the event to the channel
-		eh.chFrieghtCalculated <- freightCalculatedEvent
-	case DeliveryStartedEvent:
-		err := DeliveryStartedHandler(&e, eh.routeService, eh.mongoClient, eh.chDriverMoved)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
