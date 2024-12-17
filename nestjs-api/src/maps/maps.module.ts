@@ -9,6 +9,7 @@ import { DirectionsService } from './directions/directions.service';
   controllers: [PlacesController, DirectionsController],
   providers: [
     PlacesService,
+    //FORMA DIFERENTE DE INSTANCIAR UMA CLASSE E CRIAR UM SERVIÇO
     {
       provide: GoogleMapsClient,
       useValue: new GoogleMapsClient(),
